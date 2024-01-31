@@ -112,3 +112,8 @@ def add_maskformer2_config(cfg):
     # Importance sampling parameter for PointRend point sampling during training. Parametr `beta` in
     # the original paper.
     cfg.MODEL.MASK_FORMER.IMPORTANCE_SAMPLE_RATIO = 0.75
+    
+    #Tensorboard visualization
+    cfg.TB_VISUALIZATION = CN()
+    cfg.TB_VISUALIZATION.VIS_PERIOD = 100
+    cfg.TB_VISUALIZATION.VIS_CONF_THRESHOLD = 0.3
