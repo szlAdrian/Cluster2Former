@@ -1,6 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import logging
 import math
+import random
+import numpy as np
 from typing import Tuple
 
 import torch
@@ -13,6 +15,8 @@ from detectron2.modeling import META_ARCH_REGISTRY, build_backbone, build_sem_se
 from detectron2.modeling.backbone import Backbone
 from detectron2.modeling.postprocessing import sem_seg_postprocess
 from detectron2.structures import Boxes, ImageList, Instances, BitMasks
+from detectron2.data.detection_utils import convert_image_to_rgb
+from detectron2.utils.events import get_event_storage
 
 from .modeling.criterion import VideoSetCriterion
 from .modeling.matcher import VideoHungarianMatcher
@@ -44,6 +48,8 @@ class VideoMaskFormer(nn.Module):
         pixel_std: Tuple[float],
         # video
         num_frames,
+        vis_period: int,
+        vis_conf_threshold: int
     ):
         """
         Args:
@@ -68,6 +74,10 @@ class VideoMaskFormer(nn.Module):
             instance_on: bool, whether to output instance segmentation prediction
             panoptic_on: bool, whether to output panoptic segmentation prediction
             test_topk_per_image: int, instance segmentation parameter, keep topk instances per image
+            vis_period: int, visualize the gt and the prediction in tensorboard in every 'vis_period' 
+                iteration
+            vis_conf_threshold: int, confidence threshold for the instances (prediction) in 
+                tensorboard visualization
         """
         super().__init__()
         self.backbone = backbone
@@ -86,6 +96,17 @@ class VideoMaskFormer(nn.Module):
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
         self.num_frames = num_frames
+        
+        self.input_format = 'RGB'
+        self.vis_period = vis_period
+        self.vis_conf_threshold = vis_conf_threshold
+        
+        # to visualize in tensorboard in eval mode 
+        # because we don't know the size of validation set
+        self.val_img_num = 0
+        self.to_count_val_img_num = True
+        self.val_img_num_act = 0
+        self.rand_img_num = 0
 
     @classmethod
     def from_config(cls, cfg):
@@ -145,11 +166,117 @@ class VideoMaskFormer(nn.Module):
             "pixel_std": cfg.MODEL.PIXEL_STD,
             # video
             "num_frames": cfg.INPUT.SAMPLING_FRAME_NUM,
+            # tensorboard visualization
+            "vis_period": cfg.TB_VISUALIZATION.VIS_PERIOD,
+            "vis_conf_threshold": cfg.TB_VISUALIZATION.VIS_CONF_THRESHOLD,
         }
 
     @property
     def device(self):
         return self.pixel_mean.device
+    
+    def visualize_training(self, batched_inputs, outputs, image_size:Tuple[int], size0:int, size1:int):
+        """
+        A function used to visualize frames with ground truth annotations and 
+        the predictions in tensorboard.
+        
+        Args:
+            batched_inputs: a list, batched outputs of :class:`DatasetMapper`.
+                Each item in the list contains the inputs for one image.
+                For now, each item in the list is a dict that contains:
+                   * "image": Tensor, image in (C, H, W) format.
+                   * "instances": per-region ground truth
+                   * Other information that's included in the original dicts, such as:
+                     "height", "width" (int): the output resolution of the model (may be different
+                     from input resolution), used in inference.
+            outputs: a dictionary that contains predicted outputs of the model.
+                The dictionary contains:
+                   * "pred_logits": Tensor in (B, Q, Class+1) format.
+                   * "pred_masks": Tensor in (B, Q, T, H, W) format.
+                batched_inputs and outputs should have the same length.
+            image_size: a tuple of Integers, which defines the raw image size
+                in (H_raw,W_raw) format
+            size0: an Integer, which defines the height of the upsampled prediction
+            size1: an Integer, which defines the width of the upsampled prediction
+        """  
+        from demo.visualizer import VisualizerGT
+        from demo_video.visualizer import TrackVisualizer
+        from detectron2.utils.visualizer import ColorMode
+        
+        storage = get_event_storage()
+
+        mask_cls_results = outputs["pred_logits"]
+        mask_pred_results = outputs["pred_masks"]
+
+        mask_cls_result = mask_cls_results[0]
+        # upsample masks
+        mask_pred_result = retry_if_cuda_oom(F.interpolate)(
+            mask_pred_results[0],
+            size=(size0, size1),
+            mode="bilinear",
+            align_corners=False,
+        )
+
+        del outputs
+
+        input_per_video = batched_inputs[0] 
+
+        height = input_per_video.get("height", image_size[0])  # raw image size before data augmentation
+        width = input_per_video.get("width", image_size[1])
+        
+        predictions = retry_if_cuda_oom(self.inference_video)(mask_cls_result, mask_pred_result, image_size, height, width)
+        thresholded_idxs = np.array(predictions["pred_scores"]) >= self.vis_conf_threshold
+        
+        image_size = predictions["image_size"]
+        pred_scores = [predictions["pred_scores"][idx] for idx, v in enumerate(thresholded_idxs) if v]
+        pred_labels = [predictions["pred_labels"][idx] for idx, v in enumerate(thresholded_idxs) if v]
+        pred_masks = [predictions["pred_masks"][idx] for idx, v in enumerate(thresholded_idxs) if v]
+
+        frames = input_per_video['image']
+        frame_masks = list(zip(*pred_masks))
+        gt_vis_output = []
+        pred_vis_output = []
+        for frame_idx in range(len(frames)):
+            # gt
+            img = input_per_video["image"][frame_idx]
+            img = convert_image_to_rgb(img.permute(1, 2, 0), self.input_format)
+            if self.training:
+                visualizer = VisualizerGT(img, self.metadata)
+                v_gt = visualizer.draw_gt_instances(gt=input_per_video["instances"][frame_idx].to(torch.device("cpu")))
+                gt_vis_output.append(v_gt.get_image())
+            
+            visualizer = TrackVisualizer(img, self.metadata, instance_mode=ColorMode.IMAGE)
+            ins = Instances(image_size)
+
+            # visualize confident predictions only
+            if len(pred_scores) > 0:
+                ins.scores = pred_scores
+                ins.pred_classes = pred_labels
+                pred_masks = torch.stack(frame_masks[frame_idx], dim=0)
+                ins.pred_masks = retry_if_cuda_oom(F.interpolate)(
+                    pred_masks[None].to(torch.float32),
+                    size=(img.shape[0],img.shape[1]),
+                    mode="bilinear",
+                    align_corners=False,
+                )[0]
+               
+                v_pred = visualizer.draw_instance_predictions(predictions=ins)
+                pred_vis_output.append(v_pred.get_image())
+                
+        if self.training:
+            gt_vis_concat = np.concatenate(gt_vis_output, axis=1)
+        
+        if len(pred_scores) > 0:
+            pred_vis_concat = np.concatenate(pred_vis_output, axis=1)
+            if self.training:
+                vis_img = np.concatenate([gt_vis_concat,pred_vis_concat], axis=0)
+                vis_name = "Training - Top: GT masks;  Bottom: Predicted outputs"
+            else:
+                vis_img = pred_vis_concat
+                vis_name = "Evaluation - Predicted outputs"
+            
+            vis_img = vis_img.transpose(2, 0, 1)
+            storage.put_image(vis_name, vis_img)
 
     def forward(self, batched_inputs):
         """
@@ -200,8 +327,34 @@ class VideoMaskFormer(nn.Module):
                 else:
                     # remove this loss if not specified in `weight_dict`
                     losses.pop(k)
+                    
+            size0 = images.tensor.shape[-2]
+            size1 = images.tensor.shape[-1]
+        
+            if self.vis_period > 0:
+                storage = get_event_storage()
+                if storage.iter % self.vis_period == 0:
+                    self.visualize_training(batched_inputs, outputs, images.image_sizes[0], size0, size1)
+                
+            if self.val_img_num != 0:
+                self.to_count_val_img_num = False
+                self.rand_img_num = random.randint(1,self.val_img_num) 
+                self.val_img_num_act = 0 
             return losses
         else:
+            # counting the images in the validation set
+            if self.to_count_val_img_num:
+                self.val_img_num += 1
+            else:
+                self.val_img_num_act += 1
+                
+            size0 = images.tensor.shape[-2]
+            size1 = images.tensor.shape[-1]
+                
+            # visualize the prediction in a randomly picked validation img 
+            if self.val_img_num_act == self.rand_img_num and self.val_img_num_act != 0:
+                self.visualize_training(batched_inputs, outputs, images.image_sizes[0], size0, size1)
+            
             mask_cls_results = outputs["pred_logits"]
             mask_pred_results = outputs["pred_masks"]
 
