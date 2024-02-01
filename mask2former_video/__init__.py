@@ -6,6 +6,7 @@ from .config import add_maskformer2_video_config
 
 # models
 from .video_maskformer_model import VideoMaskFormer
+from .video_maskcluster2former_model import VideoMaskCluster2Former
 
 # video
 from .data_video import (
