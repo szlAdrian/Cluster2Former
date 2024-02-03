@@ -12,6 +12,7 @@ from .video_cluster2former_model import VideoCluster2Former
 # video
 from .data_video import (
     YTVISDatasetMapper,
+    YTVISScribbleDatasetMapper,
     YTVISEvaluator,
     build_detection_train_loader,
     build_detection_test_loader,
