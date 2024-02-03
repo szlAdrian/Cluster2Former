@@ -1,9 +1,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import logging
-import math
 import random
-import numpy as np
 from typing import Tuple
+import numpy as np
 
 import torch
 from torch import nn
@@ -13,20 +12,19 @@ from detectron2.config import configurable
 from detectron2.data import MetadataCatalog
 from detectron2.modeling import META_ARCH_REGISTRY, build_backbone, build_sem_seg_head
 from detectron2.modeling.backbone import Backbone
-from detectron2.modeling.postprocessing import sem_seg_postprocess
 from detectron2.structures import Boxes, ImageList, Instances, BitMasks
 from detectron2.data.detection_utils import convert_image_to_rgb
 from detectron2.utils.events import get_event_storage
-
-from .modeling.criterion import VideoSetCriterion
-from .modeling.matcher import VideoHungarianMatcher
+from .modeling.cluster2former_criterion import VideoSetCluster2FormerCriterion
+from . import VideoMaskFormer
 from .utils.memory import retry_if_cuda_oom
+
 
 logger = logging.getLogger(__name__)
 
 
 @META_ARCH_REGISTRY.register()
-class VideoMaskFormer(nn.Module):
+class VideoCluster2Former(VideoMaskFormer):
     """
     Main class for mask classification semantic segmentation architectures.
     """
@@ -46,10 +44,12 @@ class VideoMaskFormer(nn.Module):
         sem_seg_postprocess_before_inference: bool,
         pixel_mean: Tuple[float],
         pixel_std: Tuple[float],
+        cluster_eval: bool,
         # video
         num_frames,
         vis_period: int,
-        vis_conf_threshold: int
+        vis_conf_threshold: int,
+        test_inference_threshold: float,
     ):
         """
         Args:
@@ -73,40 +73,30 @@ class VideoMaskFormer(nn.Module):
             semantic_on: bool, whether to output semantic segmentation prediction
             instance_on: bool, whether to output instance segmentation prediction
             panoptic_on: bool, whether to output panoptic segmentation prediction
-            test_topk_per_image: int, instance segmentation parameter, keep topk instances per image
+            cluster_eval: wheter do cluster panoptic inference or not
             vis_period: int, visualize the gt and the prediction in tensorboard in every 'vis_period' 
                 iteration
             vis_conf_threshold: int, confidence threshold for the instances (prediction) in 
                 tensorboard visualization
+            test_inference_threshold: thresholding the softmax in inference to generate mask
         """
-        super().__init__()
-        self.backbone = backbone
-        self.sem_seg_head = sem_seg_head
-        self.criterion = criterion
-        self.num_queries = num_queries
-        self.overlap_threshold = overlap_threshold
-        self.object_mask_threshold = object_mask_threshold
-        self.metadata = metadata
-        if size_divisibility < 0:
-            # use backbone size_divisibility if not set
-            size_divisibility = self.backbone.size_divisibility
-        self.size_divisibility = size_divisibility
-        self.sem_seg_postprocess_before_inference = sem_seg_postprocess_before_inference
-        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
-        self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
-
-        self.num_frames = num_frames
+        super().__init__(backbone = backbone,
+        sem_seg_head = sem_seg_head,
+        criterion = criterion,
+        num_queries = num_queries,
+        object_mask_threshold = object_mask_threshold,
+        overlap_threshold = overlap_threshold,
+        metadata = metadata,
+        size_divisibility = size_divisibility,
+        sem_seg_postprocess_before_inference = sem_seg_postprocess_before_inference,
+        pixel_mean = pixel_mean,
+        pixel_std = pixel_std,
+        num_frames = num_frames,
+        vis_period = vis_period,
+        vis_conf_threshold = vis_conf_threshold)
         
-        self.input_format = 'RGB'
-        self.vis_period = vis_period
-        self.vis_conf_threshold = vis_conf_threshold
-        
-        # to visualize in tensorboard in eval mode 
-        # because we don't know the size of validation set
-        self.val_img_num = 0
-        self.to_count_val_img_num = True
-        self.val_img_num_act = 0
-        self.rand_img_num = 0
+        self.cluster_eval = cluster_eval
+        self.test_inference_threshold = test_inference_threshold
 
     @classmethod
     def from_config(cls, cfg):
@@ -119,18 +109,9 @@ class VideoMaskFormer(nn.Module):
 
         # loss weights
         class_weight = cfg.MODEL.MASK_FORMER.CLASS_WEIGHT
-        dice_weight = cfg.MODEL.MASK_FORMER.DICE_WEIGHT
-        mask_weight = cfg.MODEL.MASK_FORMER.MASK_WEIGHT
+        cluster_weight = cfg.MODEL.CLUSTER_2_FORMER.CLUSTER_WEIGHT
 
-        # building criterion
-        matcher = VideoHungarianMatcher(
-            cost_class=class_weight,
-            cost_mask=mask_weight,
-            cost_dice=dice_weight,
-            num_points=cfg.MODEL.MASK_FORMER.TRAIN_NUM_POINTS,
-        )
-
-        weight_dict = {"loss_ce": class_weight, "loss_mask": mask_weight, "loss_dice": dice_weight}
+        weight_dict = {"loss_ce": class_weight, "loss_cluster": cluster_weight}
 
         if deep_supervision:
             dec_layers = cfg.MODEL.MASK_FORMER.DEC_LAYERS
@@ -139,17 +120,35 @@ class VideoMaskFormer(nn.Module):
                 aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
             weight_dict.update(aux_weight_dict)
 
-        losses = ["labels", "masks"]
+        if cfg.INPUT.DATASET_MAPPER_NAME == 'mask_former_scribble':
+            losses = ["clusters_labels_scribble"]
+        else:
+            losses = ["clusters_labels"]
+        
+        cluster_eval = False
+        
+        if "clusters_labels" in losses or "clusters_labels_scribble" in losses:
+            cluster_eval = True
 
-        criterion = VideoSetCriterion(
+        criterion = VideoSetCluster2FormerCriterion(
             sem_seg_head.num_classes,
-            matcher=matcher,
             weight_dict=weight_dict,
             eos_coef=no_object_weight,
             losses=losses,
             num_points=cfg.MODEL.MASK_FORMER.TRAIN_NUM_POINTS,
             oversample_ratio=cfg.MODEL.MASK_FORMER.OVERSAMPLE_RATIO,
             importance_sample_ratio=cfg.MODEL.MASK_FORMER.IMPORTANCE_SAMPLE_RATIO,
+            total_instance_pixel_sample_num=cfg.MODEL.CLUSTER_2_FORMER.TOTAL_INSTANCE_PIXEL_SAMPLE_NUM,
+            min_num_sample=cfg.MODEL.CLUSTER_2_FORMER.MIN_NUM_SAMPLE,
+            max_num_sample=cfg.MODEL.CLUSTER_2_FORMER.MAX_NUM_SAMPLE,
+            max_inst=cfg.MODEL.CLUSTER_2_FORMER.MAX_INST,
+            beta=cfg.MODEL.CLUSTER_2_FORMER.BETA,
+            delta=cfg.MODEL.CLUSTER_2_FORMER.DELTA,
+            make_inter_frame_bg_points_connections=cfg.MODEL.CLUSTER_2_FORMER.MAKE_INTER_FRAME_BG_POINTS_CONNECTIONS,
+            make_inter_frame_point_connections=cfg.MODEL.CLUSTER_2_FORMER.MAKE_INTER_FRAME_POINT_CONNECTIONS,
+            min_point_pair_weight=cfg.MODEL.CLUSTER_2_FORMER.MIN_POINT_PAIR_WEIGHT,
+            make_positive_bg_pairs=cfg.MODEL.CLUSTER_2_FORMER.MAKE_POSITIVE_BG_PAIRS,
+            cos_sim_clustering_loss=cfg.MODEL.CLUSTER_2_FORMER.COS_SIM_CLUSTERING_LOSS,
         )
 
         return {
@@ -164,18 +163,16 @@ class VideoMaskFormer(nn.Module):
             "sem_seg_postprocess_before_inference": True,
             "pixel_mean": cfg.MODEL.PIXEL_MEAN,
             "pixel_std": cfg.MODEL.PIXEL_STD,
-            # video
-            "num_frames": cfg.INPUT.SAMPLING_FRAME_NUM,
+            "cluster_eval": cluster_eval,
+            "test_inference_threshold": cfg.MODEL.CLUSTER_2_FORMER.TEST.INFERENCE_THRESHOLD,
             # tensorboard visualization
             "vis_period": cfg.TB_VISUALIZATION.VIS_PERIOD,
             "vis_conf_threshold": cfg.TB_VISUALIZATION.VIS_CONF_THRESHOLD,
+            # video
+            "num_frames": cfg.INPUT.SAMPLING_FRAME_NUM,
         }
-
-    @property
-    def device(self):
-        return self.pixel_mean.device
-    
-    def tensorboard_visualization(self, batched_inputs, outputs, image_size:Tuple[int], size0:int, size1:int):
+        
+    def tensorboard_visualization(self, batched_inputs, proposals, image_size, size0, size1):
         """
         A function used to visualize frames with ground truth annotations and 
         the predictions in tensorboard.
@@ -198,15 +195,15 @@ class VideoMaskFormer(nn.Module):
                 in (H_raw,W_raw) format
             size0: an Integer, which defines the height of the upsampled prediction
             size1: an Integer, which defines the width of the upsampled prediction
-        """  
+        """ 
         from demo.visualizer import VisualizerGT
         from demo_video.visualizer import TrackVisualizer
         from detectron2.utils.visualizer import ColorMode
         
         storage = get_event_storage()
 
-        mask_cls_results = outputs["pred_logits"]
-        mask_pred_results = outputs["pred_masks"]
+        mask_cls_results = proposals["pred_logits"]
+        mask_pred_results = proposals["pred_masks"]
 
         mask_cls_result = mask_cls_results[0]
         # upsample masks
@@ -216,15 +213,15 @@ class VideoMaskFormer(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-
-        del outputs
+        
+        del proposals
 
         input_per_video = batched_inputs[0] 
 
         height = input_per_video.get("height", image_size[0])  # raw image size before data augmentation
         width = input_per_video.get("width", image_size[1])
         
-        predictions = retry_if_cuda_oom(self.inference_video)(mask_cls_result, mask_pred_result, image_size, height, width)
+        predictions = retry_if_cuda_oom(self.inference_video_cluster)(mask_cls_result, mask_pred_result, image_size, height, width)
         thresholded_idxs = np.array(predictions["pred_scores"]) >= self.vis_conf_threshold
         
         image_size = predictions["image_size"]
@@ -259,7 +256,7 @@ class VideoMaskFormer(nn.Module):
                     mode="bilinear",
                     align_corners=False,
                 )[0]
-               
+                
                 v_pred = visualizer.draw_instance_predictions(predictions=ins)
                 pred_vis_output.append(v_pred.get_image())
                 
@@ -277,6 +274,10 @@ class VideoMaskFormer(nn.Module):
             
             vis_img = vis_img.transpose(2, 0, 1)
             storage.put_image(vis_name, vis_img)
+
+    @property
+    def device(self):
+        return self.pixel_mean.device
 
     def forward(self, batched_inputs):
         """
@@ -310,7 +311,7 @@ class VideoMaskFormer(nn.Module):
                 images.append(frame.to(self.device))
         images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.size_divisibility)
-
+    
         features = self.backbone(images.tensor)
         outputs = self.sem_seg_head(features)
 
@@ -330,12 +331,12 @@ class VideoMaskFormer(nn.Module):
                     
             size0 = images.tensor.shape[-2]
             size1 = images.tensor.shape[-1]
-        
+            
             if self.vis_period > 0:
                 storage = get_event_storage()
                 if storage.iter % self.vis_period == 0:
                     self.tensorboard_visualization(batched_inputs, outputs, images.image_sizes[0], size0, size1)
-                
+            
             if self.val_img_num != 0:
                 self.to_count_val_img_num = False
                 self.rand_img_num = random.randint(1,self.val_img_num) 
@@ -354,7 +355,7 @@ class VideoMaskFormer(nn.Module):
             # visualize the prediction in a randomly picked validation img 
             if self.val_img_num_act == self.rand_img_num and self.val_img_num_act != 0:
                 self.tensorboard_visualization(batched_inputs, outputs, images.image_sizes[0], size0, size1)
-            
+                
             mask_cls_results = outputs["pred_logits"]
             mask_pred_results = outputs["pred_masks"]
 
@@ -375,37 +376,12 @@ class VideoMaskFormer(nn.Module):
             height = input_per_image.get("height", image_size[0])  # raw image size before data augmentation
             width = input_per_image.get("width", image_size[1])
 
-            return retry_if_cuda_oom(self.inference_video)(mask_cls_result, mask_pred_result, image_size, height, width)
-
-    def prepare_targets(self, targets, images):
-        h_pad, w_pad = images.tensor.shape[-2:]
-        gt_instances = []
-        for targets_per_video in targets:
-            _num_instance = len(targets_per_video["instances"][0])
-            mask_shape = [_num_instance, self.num_frames, h_pad, w_pad]
-            gt_masks_per_video = torch.zeros(mask_shape, dtype=torch.bool, device=self.device)
-
-            gt_ids_per_video = []
-            for f_i, targets_per_frame in enumerate(targets_per_video["instances"]):
-                targets_per_frame = targets_per_frame.to(self.device)
-                h, w = targets_per_frame.image_size
-
-                gt_ids_per_video.append(targets_per_frame.gt_ids[:, None])
-                gt_masks_per_video[:, f_i, :h, :w] = targets_per_frame.gt_masks.tensor
-
-            gt_ids_per_video = torch.cat(gt_ids_per_video, dim=1)
-            valid_idx = (gt_ids_per_video != -1).any(dim=-1)
-
-            gt_classes_per_video = targets_per_frame.gt_classes[valid_idx]          # N,
-            gt_ids_per_video = gt_ids_per_video[valid_idx]                          # N, num_frames
-
-            gt_instances.append({"labels": gt_classes_per_video, "ids": gt_ids_per_video})
-            gt_masks_per_video = gt_masks_per_video[valid_idx].float()          # N, num_frames, H, W
-            gt_instances[-1].update({"masks": gt_masks_per_video})
-
-        return gt_instances
-
-    def inference_video(self, pred_cls, pred_masks, img_size, output_height, output_width):
+            if not self.cluster_eval:
+                return retry_if_cuda_oom(self.inference_video)(mask_cls_result, mask_pred_result, image_size, height, width)
+            else:
+                return retry_if_cuda_oom(self.inference_video_cluster)(mask_cls_result, mask_pred_result, image_size, height, width)
+    
+    def inference_video_cluster(self, pred_cls, pred_masks, img_size, output_height, output_width):
         if len(pred_cls) > 0:
             scores = F.softmax(pred_cls, dim=-1)[:, :-1]
             labels = torch.arange(self.sem_seg_head.num_classes, device=self.device).unsqueeze(0).repeat(self.num_queries, 1).flatten(0, 1)
@@ -413,14 +389,16 @@ class VideoMaskFormer(nn.Module):
             scores_per_image, topk_indices = scores.flatten(0, 1).topk(10, sorted=False)
             labels_per_image = labels[topk_indices]
             topk_indices = topk_indices // self.sem_seg_head.num_classes
+            
+            pred_masks = F.softmax(pred_masks, dim=0)
             pred_masks = pred_masks[topk_indices]
-
             pred_masks = pred_masks[:, :, : img_size[0], : img_size[1]]
+
             pred_masks = F.interpolate(
                 pred_masks, size=(output_height, output_width), mode="bilinear", align_corners=False
             )
-
-            masks = pred_masks > 0.
+            
+            masks = pred_masks > self.test_inference_threshold
 
             out_scores = scores_per_image.tolist()
             out_labels = labels_per_image.tolist()
