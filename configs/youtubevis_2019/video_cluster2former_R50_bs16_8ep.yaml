@@ -1,0 +1,3 @@
+_BASE_: video_maskformer2_R50_bs16_8ep.yaml
+MODEL:
+  META_ARCHITECTURE: "VideoCluster2Former"
