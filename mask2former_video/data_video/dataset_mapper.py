@@ -6,6 +6,7 @@ import logging
 import random
 import numpy as np
 from typing import List, Union
+import pycocotools.mask as mask_util
 import torch
 
 from detectron2.config import configurable
@@ -14,6 +15,9 @@ from detectron2.structures import (
     Boxes,
     BoxMode,
     Instances,
+    PolygonMasks,
+    Keypoints,
+    polygons_to_bitmask,
 )
 
 from detectron2.data import detection_utils as utils
@@ -21,7 +25,7 @@ from detectron2.data import transforms as T
 
 from .augmentation import build_augmentation
 
-__all__ = ["YTVISDatasetMapper", "CocoClipDatasetMapper"]
+__all__ = ["YTVISDatasetMapper", "YTVISScribbleDatasetMapper", "CocoClipDatasetMapper"]
 
 
 def filter_empty_instances(instances, by_box=True, by_mask=True, box_threshold=1e-5):
@@ -268,6 +272,203 @@ class YTVISDatasetMapper:
 
         return dataset_dict
 
+class YTVISScribbleDatasetMapper(YTVISDatasetMapper):
+    """
+    A callable which takes a dataset dict in YouTube-VIS Scribble Dataset format,
+    and map it into a format used by the model.
+    """
+    @configurable
+    def __init__(
+        self,
+        is_train: bool,
+        *,
+        augmentations: List[Union[T.Augmentation, T.Transform]],
+        image_format: str,
+        use_instance_mask: bool = False,
+        sampling_frame_num: int = 2,
+        sampling_frame_range: int = 5,
+        sampling_frame_shuffle: bool = False,
+        num_classes: int = 40,
+    ):
+        super().__init__(
+            is_train=is_train,
+            augmentations=augmentations,
+            image_format=image_format,
+            use_instance_mask=use_instance_mask,
+            sampling_frame_num=sampling_frame_num,
+            sampling_frame_range=sampling_frame_range,
+            sampling_frame_shuffle=sampling_frame_shuffle,
+            num_classes=num_classes
+            )
+        
+    def __call__(self, dataset_dict):
+        """
+        Args:
+            dataset_dict (dict): Metadata of one video, in YTVIS Scribble Dataset format.
+
+        Returns:
+            dict: a format that builtin models in detectron2 accept
+        """
+        # TODO consider examining below deepcopy as it costs huge amount of computations.
+        dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
+
+        video_length = dataset_dict["length"]
+        if self.is_train:
+            ref_frame = random.randrange(video_length)
+
+            start_idx = max(0, ref_frame-self.sampling_frame_range)
+            end_idx = min(video_length, ref_frame+self.sampling_frame_range + 1)
+
+            selected_idx = np.random.choice(
+                np.array(list(range(start_idx, ref_frame)) + list(range(ref_frame+1, end_idx))),
+                self.sampling_frame_num - 1,
+            )
+            selected_idx = selected_idx.tolist() + [ref_frame]
+            selected_idx = sorted(selected_idx)
+            if self.sampling_frame_shuffle:
+                random.shuffle(selected_idx)
+        else:
+            selected_idx = range(video_length)
+
+        video_annos = dataset_dict.pop("annotations", None)
+        file_names = dataset_dict.pop("file_names", None)
+
+        if self.is_train:
+            _ids = set()
+            for frame_idx in selected_idx:
+                _ids.update([anno["id"] for anno in video_annos[frame_idx]])
+            ids = dict()
+            for i, _id in enumerate(_ids):
+                ids[_id] = i
+
+        dataset_dict["image"] = []
+        dataset_dict["instances"] = []
+        dataset_dict["file_names"] = []
+        for frame_idx in selected_idx:
+            dataset_dict["file_names"].append(file_names[frame_idx])
+
+            # Read image
+            image = utils.read_image(file_names[frame_idx], format=self.image_format)
+            utils.check_image_size(dataset_dict, image)
+
+            aug_input = T.AugInput(image)
+            transforms = self.augmentations(aug_input)
+            image = aug_input.image
+
+            image_shape = image.shape[:2]  # h, w
+            # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
+            # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
+            # Therefore it's important to use torch.Tensor.
+            dataset_dict["image"].append(torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1))))
+
+            if (video_annos is None) or (not self.is_train):
+                continue
+
+            # NOTE copy() is to prevent annotations getting changed from applying augmentations
+            _frame_annos = []
+            for anno in video_annos[frame_idx]:
+                _anno = {}
+                for k, v in anno.items():
+                    _anno[k] = copy.deepcopy(v)
+                _frame_annos.append(_anno)
+
+            # USER: Implement additional transformations if you have other types of data
+            annos = [
+                utils.transform_instance_annotations(obj, transforms, image_shape)
+                for obj in _frame_annos
+                if obj.get("iscrowd", 0) == 0
+            ]
+            sorted_annos = [_get_dummy_anno(self.num_classes) for _ in range(len(ids))]
+
+            for _anno in annos:
+                idx = ids[_anno["id"]]
+                sorted_annos[idx] = _anno
+            _gt_ids = [_anno["id"] for _anno in sorted_annos]
+            
+            instances = self.annotations_to_instances_scribble(sorted_annos, image_shape, mask_format="bitmask")
+            instances.gt_ids = torch.tensor(_gt_ids)
+            if instances.has("gt_masks"):
+                instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
+                instances = filter_empty_instances(instances)
+            else:
+                instances.gt_masks = BitMasks(torch.empty((0, *image_shape)))
+            dataset_dict["instances"].append(instances)
+
+        return dataset_dict
+    
+    def annotations_to_instances_scribble(self,annos, image_size, mask_format="polygon"):
+        """
+        Create an :class:`Instances` object used by the models,
+        from instance annotations in the dataset dict.
+
+        Args:
+            annos (list[dict]): a list of instance annotations in one image, each
+                element for one instance.
+            image_size (tuple): height, width
+
+        Returns:
+            Instances:
+                It will contain fields "gt_boxes", "gt_classes",
+                "gt_masks", "gt_keypoints", if they can be obtained from `annos`.
+                This is the format that builtin models expect.
+        """
+        boxes = (
+            np.stack(
+                [BoxMode.convert(obj["bbox"], obj["bbox_mode"], BoxMode.XYXY_ABS) for obj in annos]
+            )
+            if len(annos)
+            else np.zeros((0, 4))
+        )
+        target = Instances(image_size)
+        target.gt_boxes = Boxes(boxes)
+
+        classes = [int(obj["category_id"]) if obj["category_id"] is not None else -1 for obj in annos]
+        classes = torch.tensor(classes, dtype=torch.int64)
+        target.gt_classes = classes
+
+        if len(annos) and "segmentation" in annos[0]:
+            segms = [obj["segmentation"] for obj in annos]
+            if mask_format == "polygon":
+                try:
+                    masks = PolygonMasks(segms)
+                except ValueError as e:
+                    raise ValueError(
+                        "Failed to use mask_format=='polygon' from the given annotations!"
+                    ) from e
+            else:
+                assert mask_format == "bitmask", mask_format
+                masks = []
+                for segm in segms:
+                    if isinstance(segm, list):
+                        # polygon
+                        masks.append(polygons_to_bitmask(segm, *image_size))
+                    elif isinstance(segm, dict):
+                        # COCO RLE
+                        masks.append(mask_util.decode(segm))
+                    elif isinstance(segm, np.ndarray):
+                        assert segm.ndim == 2, "Expect segmentation of 2 dimensions, got {}.".format(
+                            segm.ndim
+                        )
+                        # mask array
+                        masks.append(segm)
+                    else:
+                        raise ValueError(
+                            "Cannot convert segmentation of type '{}' to BitMasks!"
+                            "Supported types are: polygons as list[list[float] or ndarray],"
+                            " COCO-style RLE as a dict, or a binary segmentation mask "
+                            " in a 2D numpy array of shape HxW.".format(type(segm))
+                        )
+                # torch.from_numpy does not support array with negative stride.
+                masks = BitMasks(
+                    torch.stack([torch.from_numpy(np.ascontiguousarray(x)) for x in masks])
+                )
+            target.gt_masks = masks
+
+        if len(annos) and "keypoints" in annos[0]:
+            kpts = [obj.get("keypoints", []) for obj in annos]
+            target.gt_keypoints = Keypoints(kpts)
+
+        return target
 
 class CocoClipDatasetMapper:
     """

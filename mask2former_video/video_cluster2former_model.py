@@ -120,7 +120,7 @@ class VideoCluster2Former(VideoMaskFormer):
                 aux_weight_dict.update({k + f"_{i}": v for k, v in weight_dict.items()})
             weight_dict.update(aux_weight_dict)
 
-        if cfg.INPUT.DATASET_MAPPER_NAME == 'mask_former_scribble':
+        if cfg.INPUT.DATASET_MAPPER_NAME == 'cluster2former_scribble':
             losses = ["clusters_labels_scribble"]
         else:
             losses = ["clusters_labels"]

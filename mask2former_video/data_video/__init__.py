@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # Modified by Bowen Cheng from https://github.com/sukjunhwang/IFC
 
-from .dataset_mapper import YTVISDatasetMapper, CocoClipDatasetMapper
+from .dataset_mapper import YTVISDatasetMapper, YTVISScribbleDatasetMapper, CocoClipDatasetMapper
 from .build import *
 
 from .datasets import *

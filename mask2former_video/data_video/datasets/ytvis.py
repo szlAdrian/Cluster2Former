@@ -250,7 +250,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
                         continue  # ignore this instance
                 obj["segmentation"] = segm
 
-                if id_map:
+                if id_map and obj["category_id"] is not None:
                     obj["category_id"] = id_map[obj["category_id"]]
                 frame_objs.append(obj)
             video_objs.append(frame_objs)
@@ -294,42 +294,186 @@ def register_ytvis_instances(name, metadata, json_file, image_root):
 
 
 if __name__ == "__main__":
-    """
-    Test the YTVIS json dataset loader.
-    """
     from detectron2.utils.logger import setup_logger
-    from detectron2.utils.visualizer import Visualizer
+    from detectron2.utils.visualizer import Visualizer, ColorMode, _create_text_labels
     import detectron2.data.datasets  # noqa # add pre-defined metadata
     import sys
+    import torch
+    import argparse
     from PIL import Image
 
     logger = setup_logger(name=__name__)
-    #assert sys.argv[3] in DatasetCatalog.list()
-    meta = MetadataCatalog.get("ytvis_2019_train")
-
-    json_file = "./datasets/ytvis/instances_train_sub.json"
-    image_root = "./datasets/ytvis/train/JPEGImages"
-    dicts = load_ytvis_json(json_file, image_root, dataset_name="ytvis_2019_train")
-    logger.info("Done loading {} samples.".format(len(dicts)))
-
-    dirname = "ytvis-data-vis"
-    os.makedirs(dirname, exist_ok=True)
-
+    
+    parser = argparse.ArgumentParser(description="maskformer2 demo for builtin configs")
+    parser.add_argument(
+        "--is-scribble",
+        type=bool,
+        default=False,
+        help="Is it a scribble dataset (True) or not (False)",
+    )
+    
+    args = parser.parse_args()
+    
     def extract_frame_dic(dic, frame_idx):
-        import copy
-        frame_dic = copy.deepcopy(dic)
-        annos = frame_dic.get("annotations", None)
-        if annos:
-            frame_dic["annotations"] = annos[frame_idx]
+            import copy
+            frame_dic = copy.deepcopy(dic)
+            annos = frame_dic.get("annotations", None)
+            if annos:
+                frame_dic["annotations"] = annos[frame_idx]
 
-        return frame_dic
+            return frame_dic
+        
+    if not args.is_scribble:
+        """
+        Test the YTVIS json dataset loader.
+        """
+        
+        #assert sys.argv[3] in DatasetCatalog.list()
+        meta = MetadataCatalog.get("ytvis_2019_train")
 
-    for d in dicts:
-        vid_name = d["file_names"][0].split('/')[-2]
-        os.makedirs(os.path.join(dirname, vid_name), exist_ok=True)
-        for idx, file_name in enumerate(d["file_names"]):
-            img = np.array(Image.open(file_name))
-            visualizer = Visualizer(img, metadata=meta)
-            vis = visualizer.draw_dataset_dict(extract_frame_dic(d, idx))
-            fpath = os.path.join(dirname, vid_name, file_name.split('/')[-1])
-            vis.save(fpath)
+        json_file = "./datasets/ytvis/instances_train_sub.json"
+        image_root = "./datasets/ytvis/train/JPEGImages"
+        dicts = load_ytvis_json(json_file, image_root, dataset_name="ytvis_2019_train")
+        logger.info("Done loading {} samples.".format(len(dicts)))
+
+        dirname = "ytvis-data-vis"
+        os.makedirs(dirname, exist_ok=True)
+
+        for d in dicts:
+            vid_name = d["file_names"][0].split('/')[-2]
+            os.makedirs(os.path.join(dirname, vid_name), exist_ok=True)
+            for idx, file_name in enumerate(d["file_names"]):
+                img = np.array(Image.open(file_name))
+                visualizer = Visualizer(img, metadata=meta)
+                vis = visualizer.draw_dataset_dict(extract_frame_dic(d, idx))
+                fpath = os.path.join(dirname, vid_name, file_name.split('/')[-1])
+                vis.save(fpath)
+    else:
+        """
+        Test the YTVIS scribble json dataset loader.
+        """
+        
+        #assert sys.argv[3] in DatasetCatalog.list()
+        meta = MetadataCatalog.get("ytvis_2019_train")
+
+        json_file = "./datasets/ytvis_2019/train_scribble.json"
+        image_root = "./datasets/ytvis_2019/train/JPEGImages"
+        dicts = load_ytvis_json(json_file, image_root, dataset_name="ytvis_2019_train")
+        logger.info("Done loading {} samples.".format(len(dicts)))
+
+        dirname = "ytvis-scribble-data-vis"
+        os.makedirs(dirname, exist_ok=True)
+        
+        def _create_text_labels(classes, scores, class_names, is_crowd=None):
+            """
+            Args:
+                classes (list[int] or None)
+                scores (list[float] or None)
+                class_names (list[str] or None)
+                is_crowd (list[bool] or None)
+
+            Returns:
+                list[str] or None
+            """
+
+            labels = None
+            if classes is not None:
+                if class_names is not None and len(class_names) > 0:
+                    #labels = [class_names[i] for i in classes ]
+                    labels = []
+                    for i in classes:
+                        if i is None:
+                            labels.append('background')
+                        else:
+                            labels.append(class_names[i] if i < len(class_names) else str(i))
+                        
+                else:
+                    labels = [str(i) for i in classes]
+            if scores is not None:
+                if labels is None:
+                    labels = ["{:.0f}%".format(s * 100) for s in scores]
+                else:
+                    labels = ["{} {:.0f}%".format(l, s * 100) for l, s in zip(labels, scores)]
+            if labels is not None and is_crowd is not None:
+                labels = [l + ("|crowd" if crowd else "") for l, crowd in zip(labels, is_crowd)]
+            return labels
+        
+        class ScribbleVisualizer(Visualizer):
+            def draw_dataset_dict(self, dic):
+                """
+                Draw annotations/segmentations in Detectron2 Dataset format.
+
+                Args:
+                    dic (dict): annotation/segmentation data of one image, in Detectron2 Dataset format.
+
+                Returns:
+                    output (VisImage): image object with visualizations.
+                """
+                annos = dic.get("annotations", None)
+                if annos:
+                    if "segmentation" in annos[0]:
+                        masks = [x["segmentation"] for x in annos]
+                    else:
+                        masks = None
+                    if "keypoints" in annos[0]:
+                        keypts = [x["keypoints"] for x in annos]
+                        keypts = np.array(keypts).reshape(len(annos), -1, 3)
+                    else:
+                        keypts = None
+
+                    boxes = [
+                        BoxMode.convert(x["bbox"], x["bbox_mode"], BoxMode.XYXY_ABS)
+                        if len(x["bbox"]) == 4
+                        else x["bbox"]
+                        for x in annos
+                    ]
+
+                    colors = None
+                    category_ids = [x["category_id"] for x in annos]
+                    if self._instance_mode == ColorMode.SEGMENTATION and self.metadata.get("thing_colors"):
+                        colors = [
+                            self._jitter([x / 255 for x in self.metadata.thing_colors[c]])
+                            for c in category_ids
+                        ]
+                    names = self.metadata.get("thing_classes", None)
+                    labels = _create_text_labels(
+                        category_ids,
+                        scores=None,
+                        class_names=names,
+                        is_crowd=[x.get("iscrowd", 0) for x in annos],
+                    )
+                    self.overlay_instances(
+                        labels=labels, boxes=boxes, masks=masks, keypoints=keypts, assigned_colors=colors
+                    )
+
+                sem_seg = dic.get("sem_seg", None)
+                if sem_seg is None and "sem_seg_file_name" in dic:
+                    with PathManager.open(dic["sem_seg_file_name"], "rb") as f:
+                        sem_seg = Image.open(f)
+                        sem_seg = np.asarray(sem_seg, dtype="uint8")
+                if sem_seg is not None:
+                    self.draw_sem_seg(sem_seg, area_threshold=0, alpha=0.5)
+
+                pan_seg = dic.get("pan_seg", None)
+                if pan_seg is None and "pan_seg_file_name" in dic:
+                    with PathManager.open(dic["pan_seg_file_name"], "rb") as f:
+                        pan_seg = Image.open(f)
+                        pan_seg = np.asarray(pan_seg)
+                        from panopticapi.utils import rgb2id
+
+                        pan_seg = rgb2id(pan_seg)
+                if pan_seg is not None:
+                    segments_info = dic["segments_info"]
+                    pan_seg = torch.tensor(pan_seg)
+                    self.draw_panoptic_seg(pan_seg, segments_info, area_threshold=0, alpha=0.5)
+                return self.output
+
+        for d in dicts:
+            vid_name = d["file_names"][0].split('/')[-2]
+            os.makedirs(os.path.join(dirname, vid_name), exist_ok=True)
+            for idx, file_name in enumerate(d["file_names"]):
+                img = np.array(Image.open(file_name))
+                visualizer = ScribbleVisualizer(img, metadata=meta)
+                vis = visualizer.draw_dataset_dict(extract_frame_dic(d, idx))
+                fpath = os.path.join(dirname, vid_name, file_name.split('/')[-1])
+                vis.save(fpath)
