@@ -1,3 +1,5 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# Modified by Adrián Szlatincsán from https://github.com/facebookresearch/detr/blob/master/models/detr.py
 """
 MaskCluster2Former criterion.
 """
@@ -71,7 +73,7 @@ class VideoSetMaskCluster2FormerCriterion(VideoSetCriterion):
         assert "pred_masks" in outputs
         
         target_masks = [t["masks"] for t in targets]
-        src_masks = outputs['pred_masks'] # (B,Q,T,H,W)
+        src_masks = outputs['pred_masks'] # (B,Q,T,H_src,W_src)
         
         # initialize required tensors to calculate the loss for the batch
         b_pairs_in_frame = torch.empty((0,2),dtype=torch.int32,device=src_masks.device)
@@ -90,7 +92,7 @@ class VideoSetMaskCluster2FormerCriterion(VideoSetCriterion):
         # iterate through the batch
         for b_idx, target_mask, src_mask in zip(range(len(target_masks)), target_masks, src_masks):
             # target_mask (N,T,H,W)
-            # src_mask (Q,T,H,W)
+            # src_mask (Q,T,H_src,W_src)
             
             point_coords_list = []
             
@@ -304,7 +306,7 @@ class VideoSetMaskCluster2FormerCriterion(VideoSetCriterion):
                         src_mask[:,frame_idx,:,:][:,None],
                         point_coords.repeat(src_mask.shape[0],1,1),
                         align_corners=False
-                    ).squeeze(1)
+                    ).squeeze(1) # (Q,Point_num)
                 
                 b_src_clusters = torch.cat((b_src_clusters,point_logits_clusters.transpose(0, 1))) # (Point_num,Q)
                 del point_logits_clusters

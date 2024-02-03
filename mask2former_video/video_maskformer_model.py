@@ -175,7 +175,7 @@ class VideoMaskFormer(nn.Module):
     def device(self):
         return self.pixel_mean.device
     
-    def visualize_training(self, batched_inputs, outputs, image_size:Tuple[int], size0:int, size1:int):
+    def tensorboard_visualization(self, batched_inputs, outputs, image_size:Tuple[int], size0:int, size1:int):
         """
         A function used to visualize frames with ground truth annotations and 
         the predictions in tensorboard.
@@ -334,7 +334,7 @@ class VideoMaskFormer(nn.Module):
             if self.vis_period > 0:
                 storage = get_event_storage()
                 if storage.iter % self.vis_period == 0:
-                    self.visualize_training(batched_inputs, outputs, images.image_sizes[0], size0, size1)
+                    self.tensorboard_visualization(batched_inputs, outputs, images.image_sizes[0], size0, size1)
                 
             if self.val_img_num != 0:
                 self.to_count_val_img_num = False
@@ -353,7 +353,7 @@ class VideoMaskFormer(nn.Module):
                 
             # visualize the prediction in a randomly picked validation img 
             if self.val_img_num_act == self.rand_img_num and self.val_img_num_act != 0:
-                self.visualize_training(batched_inputs, outputs, images.image_sizes[0], size0, size1)
+                self.tensorboard_visualization(batched_inputs, outputs, images.image_sizes[0], size0, size1)
             
             mask_cls_results = outputs["pred_logits"]
             mask_pred_results = outputs["pred_masks"]
