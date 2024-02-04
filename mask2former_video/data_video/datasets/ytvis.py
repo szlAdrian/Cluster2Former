@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-# Modified by Bowen Cheng from https://github.com/sukjunhwang/IFC
+# Modified by Adrián Szlatincsán from https://github.com/sukjunhwang/IFC
 
 import contextlib
 import io
