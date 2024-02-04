@@ -5,7 +5,7 @@
 [[`mdpi`](https://www.mdpi.com/1424-8220/24/3/997)]
 
 <div align="center">
-  <img src="https://drive.google.com/file/d/1oQrZYdTT4PvycbOx_wuxTGcb2hYQsCVK/view?usp=sharing" width="100%" height="100%"/>
-  <img src="https://drive.google.com/file/d/1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl/view?usp=sharing" width="50%" height="100%"/>
-  <img src="https://drive.google.com/file/d/1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw/view?usp=sharing" width="50%" height="100%"/>
+  <img src="https://drive.google.com/file/d/1oQrZYdTT4PvycbOx_wuxTGcb2hYQsCVK/view?usp=drive_link" width="100%" height="100%"/>
+  <img src="https://drive.google.com/file/d/1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl/view?usp=drive_link" width="50%" height="100%"/>
+  <img src="https://drive.google.com/file/d/1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw/view?usp=drive_link" width="50%" height="100%"/>
 </div><br/>
