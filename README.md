@@ -9,7 +9,7 @@
 </div>
 
 <div align="center">
-  <img src="https://drive.google.com/uc?id=1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl" width="50%" height="100%" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
-  <img src="https://drive.google.com/uc?id=1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw" width="50%" height="100%" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
+  <img src="https://drive.google.com/uc?id=1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
+  <img src="https://drive.google.com/uc?id=1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
 </div>
 <br/>
