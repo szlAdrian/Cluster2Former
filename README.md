@@ -8,9 +8,10 @@
   <img src="https://drive.google.com/uc?id=1oQrZYdTT4PvycbOx_wuxTGcb2hYQsCVK" width="100%" height="100%"/>
 </div>
 
-
-<img src="https://drive.google.com/uc?id=1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
-<img src="https://drive.google.com/uc?id=1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
+<div style="display: flex;">
+  <img src="https://drive.google.com/uc?id=1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl" style="width: 50%; max-width: 50%; height: auto;"/>
+  <img src="https://drive.google.com/uc?id=1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw" style="width: 50%; max-width: 50%; height: auto;"/>
+</div>
 <br/>
 
 ### Features
