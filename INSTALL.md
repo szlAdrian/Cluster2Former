@@ -1,4 +1,4 @@
-## Installation
+## Installation (from Mask2Former)
 
 ### Requirements
 - Linux or macOS with Python ≥ 3.6
@@ -47,7 +47,7 @@ cd mask2former/modeling/pixel_decoder/ops
 sh make.sh
 ```
 
-### Apptainer
+## Install Cluster2Former with Apptainer
 * The apptainer image SIF file is available [here](https://drive.google.com/uc?id=1F1Si2_Iv-sS-F4uwX_3eplvZSXN_aegg). It has built from `nvidia/cuda:11.7.1-cudnn8-devel-ubuntu22.04`.
 * You can find [definition file](build_container.def) of the appatiner image in the repository, if you want to use it.
 * You can find the [container_launcher.sh](container_launcher.sh) file, before you run this file a terminal, you should modify it to start the apptainer instance and possibly make the links to your dataset (see more in the file).

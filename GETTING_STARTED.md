@@ -63,3 +63,35 @@ For more options, see `python train_net.py -h`.
 ### Video instance segmentation
 Please use `demo_video/demo.py` for video instance segmentation demo and `train_net_video.py` to train
 and evaluate video instance segmentation models.
+
+
+## Getting Started with Cluster2Former
+
+### Training & Evaluation in Command Line
+To use Cluster2Former with scribble VIS datasets, e.g. with YouTube VIS 2019 Scribble, use: 
+```
+python train_net_video.py \
+  --num-gpus 8 \
+  --config-file configs/youtubevis_2019/video_cluster2former_R50_bs16_8ep.yaml \
+  MODEL.WEIGHTS "path/to/the/weight" \
+  DATASETS.TRAIN "(\'ytvis_2019_scribble_train\',)" \
+  INPUT.DATASET_MAPPER_NAME "cluster2former_scribble" \
+```
+
+To use Cluster2Former with the original VIS datasets, e.g. with YouTube VIS 2019, use: 
+```
+python train_net_video.py \
+  --num-gpus 8 \
+  --config-file configs/youtubevis_2019/video_cluster2former_R50_bs16_8ep.yaml \
+  MODEL.WEIGHTS "path/to/the/weight" \
+```
+
+To use MaskCluster2Former (original Mask2Former plus a Similiraty-based Clustering loss) with the original VIS datasets, e.g. with YouTube VIS 2019, use: 
+```
+python train_net_video.py \
+  --num-gpus 8 \
+  --config-file configs/youtubevis_2019/video_maskcluster2former_R50_bs16_8ep.yaml \
+  MODEL.WEIGHTS "path/to/the/weight" \
+```
+
+

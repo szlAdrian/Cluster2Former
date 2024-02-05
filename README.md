@@ -21,6 +21,35 @@
 
 See [installation instructions](INSTALL.md).
 
+## Getting Started
+
+See [Preparing Datasets for Mask2Former and Cluster2Former](datasets/README.md).
+
+See [Getting Started with Mask2Former and Cluster2Former](GETTING_STARTED.md).
+
+See more in [Mask2Former](https://github.com/facebookresearch/Mask2Former)
+
+## Advanced usage
+
+See [Advanced Usage of Mask2Former](ADVANCED_USAGE.md).
+
+## Model Zoo and Baselines
+
+We also provide a set of baseline results and trained models available for download in addition to the Model Zoo of the Mask2Fomer in the [Mask2Former and Cluster2Former Model Zoo](MODEL_ZOO.md).
+
+## <a name="CitingCluster2Former"></a>Citing Mask2Former
+
+If you use Cluster2Former in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
+
+```BibTeX
+@Article{s24030997,
+AUTHOR = {Fóthi, Áron and Szlatincsán, Adrián and Somfai, Ellák},
+TITLE = {Cluster2Former: Semisupervised Clustering Transformers for Video Instance Segmentation},
+JOURNAL = {Sensors},
+YEAR = {2024},
+}
+```
+
 ## Acknowledgement
 
 Code is based on Mask2Former (https://github.com/facebookresearch/Mask2Former).
