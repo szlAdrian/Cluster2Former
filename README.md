@@ -6,11 +6,7 @@
 
 <div align="center">
   <img src="https://drive.google.com/uc?id=1oQrZYdTT4PvycbOx_wuxTGcb2hYQsCVK" width="100%" height="100%"/>
-</div>
-
-<div align="center">
-  <img src="https://drive.google.com/uc?id=1oqzV1tfF-DxWzFNUMnSn9aVXqIbcrCUl" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
-  <img src="https://drive.google.com/uc?id=1B1xC5sEs7C28GmhbvH7AUAwS3-uxtIJw" style="width: 50%; max-width: 50%; height: auto; display: inline-block;"/>
+  <img src="https://drive.google.com/uc?id=1tgrtDPd2leD0difHGY03Ula81jwZ4PCC" width="100%" height="100%"/>
 </div>
 <br/>
 
@@ -24,6 +20,35 @@
 ## Installation
 
 See [installation instructions](INSTALL.md).
+
+## Getting Started
+
+See [Preparing Datasets for Mask2Former and Cluster2Former](datasets/README.md).
+
+See [Getting Started with Mask2Former and Cluster2Former](GETTING_STARTED.md).
+
+See more in [Mask2Former](https://github.com/facebookresearch/Mask2Former)
+
+## Advanced usage
+
+See [Advanced Usage of Mask2Former](ADVANCED_USAGE.md).
+
+## Model Zoo and Baselines
+
+We also provide a set of baseline results and trained models available for download in addition to the Model Zoo of the Mask2Fomer in the [Mask2Former and Cluster2Former Model Zoo](MODEL_ZOO.md).
+
+## <a name="CitingCluster2Former"></a>Citing Mask2Former
+
+If you use Cluster2Former in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
+
+```BibTeX
+@Article{s24030997,
+AUTHOR = {Fóthi, Áron and Szlatincsán, Adrián and Somfai, Ellák},
+TITLE = {Cluster2Former: Semisupervised Clustering Transformers for Video Instance Segmentation},
+JOURNAL = {Sensors},
+YEAR = {2024},
+}
+```
 
 ## Acknowledgement
 

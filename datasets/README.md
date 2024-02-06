@@ -160,3 +160,34 @@ ytvis_2021/
     Annotations/
     JPEGImages/
 ```
+
+# Prepare Datasets for Cluster2Former
+
+## Expected dataset structure for [YouTubeVIS 2019 Scribble](https://github.com/szlAdrian/Scribble-Datasets-for-Segmentation):
+
+```
+ytvis_2019/
+  {train,train_scribble,valid,test}.json
+  {train,valid,test}/
+    Annotations/
+    JPEGImages/
+```
+
+## Expected dataset structure for [YouTubeVIS 2021 Scribble](https://github.com/szlAdrian/Scribble-Datasets-for-Segmentation):
+
+```
+ytvis_2021/
+  {train,train_scribble,valid,test}.json
+  {train,valid,test}/
+    Annotations/
+    JPEGImages/
+```
+
+## Expected dataset structure for [OVIS Scribble](https://github.com/szlAdrian/Scribble-Datasets-for-Segmentation):
+
+```
+ovis/
+  annotations_{train,train_scribble,valid,test}.json
+  {train,valid,test}/
+```
+
