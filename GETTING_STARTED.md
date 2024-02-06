@@ -67,31 +67,23 @@ and evaluate video instance segmentation models.
 
 ## Getting Started with Cluster2Former
 
+We adjusted the batch sizes, learning rates, iterations and learning rate steps to our hardware resources. See the more in the [Model Zoo](MODEL_ZOO.md).
+
+Find the documentation of the `CLUSTER_2_FORMER` parameters in the code, e.g.  [here](mask2former_video/video_cluster2former_model.py).
+
 ### Training & Evaluation in Command Line
-To use Cluster2Former with scribble VIS datasets, e.g. with YouTube VIS 2019 Scribble, use: 
+To use Cluster2Former with scribble VIS datasets, set the following configuration parameters: 
 ```
-python train_net_video.py \
-  --num-gpus 8 \
-  --config-file configs/youtubevis_2019/video_cluster2former_R50_bs16_8ep.yaml \
-  MODEL.WEIGHTS "path/to/the/weight" \
-  DATASETS.TRAIN "(\'ytvis_2019_scribble_train\',)" \
-  INPUT.DATASET_MAPPER_NAME "cluster2former_scribble" \
+  MODEL.META_ARCHITECTURE: VideoCluster2Former
+  INPUT.DATASET_MAPPER_NAME: cluster2former_scribble
 ```
 
-To use Cluster2Former with the original VIS datasets, e.g. with YouTube VIS 2019, use: 
+To use Cluster2Former with the full mask annotated VIS datasets, set the following configuration parameters:
 ```
-python train_net_video.py \
-  --num-gpus 8 \
-  --config-file configs/youtubevis_2019/video_cluster2former_R50_bs16_8ep.yaml \
-  MODEL.WEIGHTS "path/to/the/weight" \
+  MODEL.META_ARCHITECTURE: VideoCluster2Former
 ```
 
-To use MaskCluster2Former (original Mask2Former plus a Similiraty-based Clustering loss) with the original VIS datasets, e.g. with YouTube VIS 2019, use: 
+To use MaskCluster2Former (original Mask2Former plus a Similiraty-based Clustering loss) with the full mask annotated VIS datasets, set the following configuration parameters:
 ```
-python train_net_video.py \
-  --num-gpus 8 \
-  --config-file configs/youtubevis_2019/video_maskcluster2former_R50_bs16_8ep.yaml \
-  MODEL.WEIGHTS "path/to/the/weight" \
+  MODEL.META_ARCHITECTURE: VideoMaskCluster2Former
 ```
-
-

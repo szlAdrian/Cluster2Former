@@ -765,3 +765,104 @@ All models available for download through this document are licensed under the
 <td align="center"><a href="https://dl.fbaipublicfiles.com/maskformer/video_mask2former/ytvis_2021/video_maskformer2_swin_large_IN21k_384_bs16_8ep/model_final_4da256.pkl">model</a></td>
 </tr>
 </tbody></table>
+
+# Cluster2Former Model Zoo and Baselines
+
+## Introduction
+
+This file documents a collection of models reported in our paper.
+The numbers were obtained on different servers with 2 NVIDIA RTX TITAN GPUs, with 2 NVIDIA RTX 3090 GPUs and with 4 NVIDIA RTX A100 GPUs. We adjusted the batch sizes, learning rates, iterations and learning rate steps to our hardware resources.
+
+#### How to Read the Tables
+* The "Name" column contains a link to the config file. Running `train_net.py --num-gpus [num_of_gpus]` with this config file
+  will reproduce the model.
+
+## Video Instance Segmentation
+### YouTubeVIS 2019 
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Name</th>
+<th valign="bottom">Annotation</th>
+<th valign="bottom">Backbone</th>
+<th valign="bottom">Batch size</th>
+<th valign="bottom">iterations</th>
+<th valign="bottom">AP</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+<!-- ROW: video_maskcluster2former_R50_ytvis_2019 -->
+ <tr><td align="left"><a href="configs/youtubevis_2019/video_maskcluster2former_R50_ytvis_2019.yaml">MaskCluster2Former</a></td>
+ <td align="center">Whole mask</td>
+<td align="center">R50</td>
+<td align="center">4</td>
+<td align="center">24k</td>
+<td align="center">46.3</td>
+<td align="center"><a href="https://drive.google.com/uc?id=1OtnmpG6iXwqYRM1gRCqKiE7YLVRbMmL2">model</a></td>
+</tr>
+<!-- ROW: video_cluster2former_whole_mask_R50_ytvis_2019 -->
+ <tr><td align="left"><a href="configs/youtubevis_2019/video_cluster2former_whole_mask_R50_ytvis_2019.yaml">Cluster2Former</a></td>
+<td align="center">Whole mask</td>
+<td align="center">R50</td>
+<td align="center">4</td>
+<td align="center">24k</td>
+<td align="center">41.7</td>
+<td align="center"><a href="https://drive.google.com/uc?id=1pU8aWWQ0zScQxha1mzlWNI2pT9xjDb6E">model</a></td>
+</tr>
+<!-- ROW: video_cluster2former_scribble_R50_ytvis_2019 -->
+ <tr><td align="left"><a href="configs/youtubevis_2019/video_cluster2former_scribble_R50_ytvis_2019.yaml">Cluster2Former</a></td>
+<td align="center">Scribble</td>
+<td align="center">R50</td>
+<td align="center">4</td>
+<td align="center">24k</td>
+<td align="center">38.3</td>
+<td align="center"><a href="https://drive.google.com/uc?id=1mW7bDrRoVRLLlz9Zrx8HZaU67M3wh-zo">model</a></td>
+</tr>
+</tbody></table>
+
+
+### YouTubeVIS 2021
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">Name</th>
+<th valign="bottom">Annotation</th>
+<th valign="bottom">Backbone</th>
+<th valign="bottom">Batch size</th>
+<th valign="bottom">iterations</th>
+<th valign="bottom">AP</th>
+<th valign="bottom">download</th>
+<!-- TABLE BODY -->
+<!-- ROW: video_maskcluster2former_R50_ytvis_2021 -->
+ <tr><td align="left"><a href="configs/youtubevis_2021/video_maskcluster2former_R50_ytvis_2021.yaml">MaskCluster2Former</a></td>
+ <td align="center">Whole mask</td>
+<td align="center">R50</td>
+<td align="center">16</td>
+<td align="center">8k</td>
+<td align="center">41.6</td>
+<td align="center"><a href="https://drive.google.com/uc?id=19pwJEEa5--zZJkOmqoGrsLk7NYqXc3vC">model</a></td>
+</tr>
+<!-- ROW: video_cluster2former_whole_mask_R50_ytvis_2021 -->
+ <tr><td align="left"><a href="configs/youtubevis_2021/video_cluster2former_whole_mask_R50_ytvis_2021.yaml">Cluster2Former</a></td>
+<td align="center">Whole mask</td>
+<td align="center">R50</td>
+<td align="center">2</td>
+<td align="center">64k</td>
+<td align="center">34.1</td>
+<td align="center"><a href="https://drive.google.com/uc?id=1WrmGh-uv5QcUJR5Cei526cz-kehT41MG">model</a></td>
+</tr>
+<!-- ROW: video_cluster2former_scribble_R50_ytvis_2021 -->
+ <tr><td align="left"><a href="configs/youtubevis_2021/video_cluster2former_scribble_R50_ytvis_2021.yaml">Cluster2Former</a></td>
+<td align="center">Scribble</td>
+<td align="center">R50</td>
+<td align="center">8</td>
+<td align="center">16k</td>
+<td align="center">29.5</td>
+<td align="center"><a href="https://drive.google.com/uc?id=10WI6ioI0Nch81tqhNTdMc9wl7LY8Q_wJ">model</a></td>
+</tr>
+</tbody></table>
+
+
+
+
