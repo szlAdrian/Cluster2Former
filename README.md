@@ -37,7 +37,7 @@ See [Advanced Usage of Mask2Former](ADVANCED_USAGE.md).
 
 We also provide a set of baseline results and trained models available for download in addition to the Model Zoo of the Mask2Fomer in the [Mask2Former and Cluster2Former Model Zoo](MODEL_ZOO.md).
 
-## <a name="CitingCluster2Former"></a>Citing Mask2Former
+## <a name="CitingCluster2Former"></a>Citing Cluster2Former
 
 If you use Cluster2Former in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
 
