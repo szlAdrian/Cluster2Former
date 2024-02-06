@@ -10,6 +10,12 @@
 </div>
 <br/>
 
+## Abstract
+
+A novel approach for video instance segmentation is presented using semisupervised learning. Our Cluster2Former model leverages scribble-based annotations for training, significantly reducing the need for comprehensive pixel-level masks. We augment a video instance segmenter, for example, the Mask2Former architecture, with similarity-based constraint loss to handle partial annotations efficiently. We demonstrate that despite using lightweight annotations (using only 0.5% of the annotated pixels), Cluster2Former achieves competitive performance on standard benchmarks. The approach offers a cost-effective and computationally efficient solution for video instance segmentation, especially in scenarios with limited annotation resources.
+
+Keywords: transformers; video processing; instance segmentation; semisupervised learning
+
 ### Features
 * A single architecture for panoptic, instance and semantic segmentation.
 * Based on [Mask2Former](https://github.com/facebookresearch/Mask2Former), no change in the architecture of the model
