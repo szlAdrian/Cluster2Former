@@ -36,9 +36,9 @@ class VideoSetMaskCluster2FormerCriterion(VideoSetCriterion):
             eos_coef: relative classification weight applied to the no-object category
             losses: list of all the losses to be applied. See get_loss for list of available losses.
             total_instance_pixel_sample_num: total number of pixels to sample from the instances in a frame,
-            sample the same amount from the background
-            min_num_sample: minimum number of points to sample from each object and from the background
-            max_num_sample: maximum number of points to sample from each object and from the background
+            sample the same amount from the background, if <= 0, then use min_num_sample and max_num_sample
+            min_num_sample: if total_instance_pixel_sample_num <= 0, minimum number of points to sample from each object and from the background
+            max_num_sample: if total_instance_pixel_sample_num <= 0, maximum number of points to sample from each object and from the background
             max_inst: maximum number of instances to cluster
             beta: parameter for the point sampling equation for clustering (to see more, check the equation)
             delta: parameter for the point sampling equation for clustering (to see more, check the equation)
