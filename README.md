@@ -2,7 +2,7 @@
 
 [Áron Fóthi](https://sciprofiles.com/profile/3300986), [Adrián Szlatincsán](https://sciprofiles.com/profile/3372387), [Ellák Somfai](https://sciprofiles.com/profile/3299837)
 
-[[`mdpi`](https://www.mdpi.com/1424-8220/24/3/997)]
+[[`mdpi`](https://www.mdpi.com/1424-8220/24/3/997)][[`BibTeX`](#CitingCluster2Former)]
 
 <div align="center">
   <img src="https://drive.google.com/uc?id=1oQrZYdTT4PvycbOx_wuxTGcb2hYQsCVK" width="100%" height="100%"/>
